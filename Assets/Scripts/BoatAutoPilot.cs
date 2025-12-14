@@ -1,162 +1,155 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+
 using UnityEngine;
 
 public class BoatAutoPilot : MonoBehaviour
 {
-    public Vector3 baseRotation;
-
     [Range(0, 10)]
-    public float maxSpeed = 1f;
+    public float maxSpeed = 3f;
 
-    [Range(.1f, .5f)]
+    [Range(0.1f, 45f)]
+    public float steeringSpeed = 4.5f;
+
+    [Range(.01f, .5f)]
     public float maxForce = .03f;
 
     [Range(1, 10)]
-    public float neighborhoodRadius = 3f;
+    public float neighborhoodRadius = 4f;
+
+    [Range(0.1f, 10f)]
+    public float separationRadius = 2.4f;
 
     [Range(0, 3)]
-    public float separationAmount = 1f;
+    public float separationAmount = 1.1f;
 
     [Range(0, 3)]
-    public float cohesionAmount = 1f;
+    public float cohesionAmount = 0.3f;
 
     [Range(0, 3)]
-    public float alignmentAmount = 1f;
+    public float alignmentAmount = 0.5f;
 
-    public Vector2 acceleration;
-    public Vector2 velocity;
-
-    private Vector2 Position {
-        get {
-            return gameObject.transform.position;
-        }
-        set {
-            gameObject.transform.position = value;
-        }
-    }
+    private Vector3 velocity = Vector3.zero;
 
     private void Start()
     {
-        float angle = Random.Range(0, 2 * Mathf.PI);
-        transform.rotation = Quaternion.Euler(new Vector3(0, 0, angle) + baseRotation);
-        velocity = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+        // On récupère notre vélocité initiale à partir de notre orientation dans le monde;
+        velocity = transform.forward;
     }
 
     private void Update()
     {
-        var boidColliders = Physics2D.OverlapCircleAll(Position, neighborhoodRadius);
-        var boids = boidColliders.Select(o => o.GetComponent<BoatAutoPilot>()).ToList();
-        boids.Remove(this);
+        Collider[] colliders = Physics.OverlapSphere(transform.position, neighborhoodRadius);
+        List<BoatAutoPilot> boats = colliders.Select(collider => collider.GetComponent<BoatAutoPilot>()).ToList();
+        boats.Remove(this);
 
-        Flock(boids);
-        UpdateVelocity();
-        UpdatePosition();
-        UpdateRotation();
-        WrapAround();
+        Vector3 acceleration = ComputeAcceleration(boats);
+        UpdateVelocity(acceleration);
+        UpdatePosition(velocity);
+        UpdateRotation(velocity);
     }
 
-    private void Flock(IEnumerable<BoatAutoPilot> boids)
+    private Vector3 ComputeAcceleration(IEnumerable<BoatAutoPilot> boats)
     {
-        var alignment = Alignment(boids);
-        var separation = Separation(boids);
-        var cohesion = Cohesion(boids);
+        Vector3 acceleration = Vector3.zero;
 
-        acceleration = alignmentAmount * alignment + cohesionAmount * cohesion + separationAmount * separation;
+        acceleration += ComputeAlignment(boats) * alignmentAmount;
+        acceleration += ComputeSeparation(boats) * separationAmount;
+        acceleration += ComputeCohesion(boats) * cohesionAmount;
+
+        return acceleration;
     }
 
-    public void UpdateVelocity()
+    private void UpdateVelocity(Vector3 acceleration)
     {
         velocity += acceleration;
         velocity = LimitMagnitude(velocity, maxSpeed);
     }
 
-    private void UpdatePosition()
+    private void UpdatePosition(Vector3 velocity)
     {
-        Position += velocity * Time.deltaTime;
+        transform.Translate(velocity * Time.deltaTime, Space.World);
     }
 
-    private void UpdateRotation()
+    private void UpdateRotation(Vector3 velocity)
     {
-        var angle = Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg;
-        transform.rotation = Quaternion.Euler(new Vector3(0, 0, angle) + baseRotation);
+        //transform.forward = velocity;
+        transform.forward = Vector3.RotateTowards(transform.forward, velocity, Time.deltaTime * steeringSpeed, float.MaxValue);
     }
 
-    private Vector2 Alignment(IEnumerable<BoatAutoPilot> boids)
+    private Vector3 ComputeAlignment(IEnumerable<BoatAutoPilot> boats)
     {
-        var velocity = Vector2.zero;
-        if (!boids.Any()) return velocity;
+        var velocity = Vector3.zero;
+        if (!boats.Any()) return velocity;
 
-        foreach (var boid in boids)
+        foreach (var boat in boats)
         {
-            velocity += boid.velocity;
+            velocity += boat.velocity;
         }
-        velocity /= boids.Count();
 
+        velocity /= boats.Count();
         var steer = Steer(velocity.normalized * maxSpeed);
         return steer;
     }
 
-    private Vector2 Cohesion(IEnumerable<BoatAutoPilot> boids)
+    private Vector3 ComputeCohesion(IEnumerable<BoatAutoPilot> boats)
     {
-        if (!boids.Any()) return Vector2.zero;
+        if (!boats.Any()) return Vector3.zero;
 
-        var sumPositions = Vector2.zero;
-        foreach (var boid in boids)
+        var sumPositions = Vector3.zero;
+        foreach (var boat in boats)
         {
-            sumPositions += boid.Position;
+            sumPositions += boat.transform.position;
         }
-        var average = sumPositions / boids.Count();
-        var direction = average - Position;
 
+        var average = sumPositions / boats.Count();
+        var direction = average - transform.position;
         var steer = Steer(direction.normalized * maxSpeed);
         return steer;
     }
 
-    private Vector2 Separation(IEnumerable<BoatAutoPilot> boids)
+    private Vector3 ComputeSeparation(IEnumerable<BoatAutoPilot> boats)
     {
-        var direction = Vector2.zero;
-        boids = boids.Where(o => DistanceTo(o) <= neighborhoodRadius / 2);
-        if (!boids.Any()) return direction;
+        var direction = Vector3.zero;
+        boats = boats.Where(boat => Vector3.Distance(transform.position, boat.transform.position) <= separationRadius);
+        if (!boats.Any()) return direction;
 
-        foreach (var boid in boids)
+        foreach (var boat in boats)
         {
-            var difference = Position - boid.Position;
-            direction += difference.normalized / difference.magnitude;
+            Vector3 difference = transform.position - boat.transform.position;
+            direction += difference.normalized;
         }
-        direction /= boids.Count();
 
+        direction /= boats.Count();
         var steer = Steer(direction.normalized * maxSpeed);
         return steer;
     }
 
-    private Vector2 Steer(Vector2 desired)
+    private Vector3 Steer(Vector3 desiredVelocity)
     {
-        var steer = desired - velocity;
+        var steer = desiredVelocity - velocity;
         steer = LimitMagnitude(steer, maxForce);
-
         return steer;
     }
 
-    private float DistanceTo(BoatAutoPilot boid)
-    {
-        return Vector3.Distance(boid.transform.position, Position);
-    }
-
-    private Vector2 LimitMagnitude(Vector2 baseVector, float maxMagnitude)
+    private Vector3 LimitMagnitude(Vector3 baseVector, float maxMagnitude)
     {
         if (baseVector.sqrMagnitude > maxMagnitude * maxMagnitude)
         {
             baseVector = baseVector.normalized * maxMagnitude;
         }
+
         return baseVector;
     }
 
-    private void WrapAround()
+    private void OnDrawGizmosSelected()
     {
-        if (Position.x < -14) Position = new Vector2(14, Position.y);
-        if (Position.y < -8) Position = new Vector2(Position.x, 8);
-        if (Position.x > 14) Position = new Vector2(-14, Position.y);
-        if (Position.y > 8) Position = new Vector2(Position.x, -8);
+        // Neighborhood radius.
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, neighborhoodRadius);
+
+        // Separation radius.
+        Gizmos.color = Color.salmon;
+        Gizmos.DrawWireSphere(transform.position, separationRadius);
     }
 }
