@@ -119,7 +119,7 @@ public class BoatManager : MonoBehaviour
             randomBoat = boatHouseC;
         }
         // TODO Je ne vais pas rajouter un "if..else" pour chaque nouveau bateau ?!
-        // Il devrait y avoir un moyen de réunir mes Prefab dans un tableau et
+        // Il devrait y avoir un moyen de réunir mes Prefab dans une liste et
         // d'en choisir un selon sa place dans la liste...
 
         return randomBoat;
