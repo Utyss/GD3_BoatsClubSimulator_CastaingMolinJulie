@@ -3,7 +3,14 @@ guid: 4385f3f32ee5acd469979ee445ac7134
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - boatHouseA: {fileID: 1138331384927246, guid: f4fd60554feb830408409b09d8c5f2d0,
+      type: 3}
+  - boatHouseB: {fileID: 1138331384927246, guid: 9d1d0b91403a8814ab6853947579bad9,
+      type: 3}
+  - boatHouseC: {fileID: 1138331384927246, guid: be18bd8f4343bb14daad0d183019b6aa,
+      type: 3}
+  - data: {fileID: 11400000, guid: a6290f1d9d6b2f24eb2a5785f0ddb8b6, type: 2}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
